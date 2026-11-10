@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPA Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Layout concept: a ledger — a running cumulative total pinned at the top,
+     term "pages" stacked below it, each a table of entries you can edit inline.
+     Palette: deep violet, vivid orange, Lora for display, Nunito Sans for body/UI. */
+  :root{
+    --bg:#ffffff;
+    --surface:#ffffff;
+    --ink:#2a1938;
+    --ink-soft:#6c6372;
+    --border:#e4dfe8;
+    --accent:#531f75;
+    --accent-strong:#3e1758;
+    --accent-soft:#f1e9f7;
+    --accent-2:#f58220;
+    --accent-2-strong:#d96c10;
+    --accent-2-soft:#fdeadb;
+    --on-accent:#ffffff;
+    --warn:#a4441f;
+    --warn-soft:#f6e6de;
+    --font-display:'Lora', Georgia, serif;
+    --font-body:'Nunito Sans', system-ui, sans-serif;
+    --font-mono:'Nunito Sans', system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1c1424;
+      --surface:#241a2e;
+      --ink:#f5f0f8;
+      --ink-soft:#b8aec0;
+      --border:#43344f;
+      --accent:#c9a0e8;
+      --accent-strong:#e3c4fa;
+      --accent-soft:#3a2b4a;
+      --accent-2:#f8a14f;
+      --accent-2-strong:#ffb86b;
+      --accent-2-soft:#3f2a16;
+      --on-accent:#2a1938;
+      --warn:#e5986e;
+      --warn-soft:#3a2a20;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1c1424;
+    --surface:#241a2e;
+    --ink:#f5f0f8;
+    --ink-soft:#b8aec0;
+    --border:#43344f;
+    --accent:#c9a0e8;
+    --accent-strong:#e3c4fa;
+    --accent-soft:#3a2b4a;
+    --accent-2:#f8a14f;
+    --accent-2-strong:#ffb86b;
+    --accent-2-soft:#3f2a16;
+    --on-accent:#2a1938;
+    --warn:#e5986e;
+    --warn-soft:#3a2a20;
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+  }
+  .wrap{
+    max-width:880px;
+    margin:0 auto;
+    padding-block:40px 80px;
+  }
+
+  header.page-head{
+    margin-bottom:24px;
+    background:linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 72%);
+    border-radius:10px;
+    padding:28px 28px 24px;
+    position:relative;
+    overflow:hidden;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  header.page-head::after{
+    content:"";
+    position:absolute;
+    right:-40px;
+    bottom:-60px;
+    width:180px;
+    height:180px;
+    border-radius:50%;
+    background:var(--accent-2);
+    opacity:.9;
+  }
+  header.page-head::before{
+    content:"";
+    position:absolute;
+    right:30px;
+    top:-50px;
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:rgba(255,255,255,.08);
+  }
+  .eyebrow{
+    font-family:var(--font-body);
+    font-weight:800;
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--accent-2);
+    margin:0 0 8px;
+    position:relative;
+    z-index:1;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:clamp(28px,5vw,38px);
+    margin:0;
+    text-wrap:balance;
+    color:#fff;
+    position:relative;
+    z-index:1;
+  }
+  .brand-tag{
+    font-size:13px;
+    color:rgba(255,255,255,.82);
+    font-style:italic;
+    font-family:var(--font-display);
+    margin:0 0 4px;
+    max-width:220px;
+    text-align:right;
+    position:relative;
+    z-index:1;
+  }
+
+  .save-bar{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+  }
+  .export-btn{
+    background:var(--surface);
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  .export-btn:hover{
+    background:var(--accent-soft);
+  }
+  .data-bar{
+    margin-top:-10px;
+  }
+  .data-bar-label{
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .save-status{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    color:var(--ink-soft);
+  }
+  .save-status.just-saved{
+    color:var(--accent);
+    font-weight:700;
+  }
+
+  /* Cumulative summary */
+  .summary{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-left:5px solid var(--accent-2);
+    border-radius:4px;
+    padding:22px 24px;
+    margin-bottom:28px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:24px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .summary .cgpa-block{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+  }
+  .cgpa-label{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .cgpa-value{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:44px;
+    color:var(--accent-2);
+    font-variant-numeric:tabular-nums;
+    line-height:1;
+  }
+  .summary-meta{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    color:var(--ink-soft);
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .summary-meta b{color:var(--ink); font-weight:600;}
+
+  /* Grade scale */
+  details.scale{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:4px;
+    margin-bottom:28px;
+    overflow:hidden;
+  }
+  details.scale > summary{
+    cursor:pointer;
+    list-style:none;
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-weight:600;
+    font-size:14px;
+  }
+  details.scale > summary::-webkit-details-marker{display:none;}
+  details.scale > summary .chev{
+    font-family:var(--font-mono);
+    color:var(--ink-soft);
+    transition:transform .15s ease;
+  }
+  details.scale[open] > summary .chev{transform:rotate(90deg);}
+  .scale-body{
+    padding:4px 20px 18px;
+    border-top:1px solid var(--border);
+  }
+  .scale-hint{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:12px 0 14px;
+  }
+  .scale-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:10px;
+  }
+  .scale-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:6px 8px;
+    min-width:0;
+  }
+  .scale-row input.letter{
+    width:3.2em;
+    font-family:var(--font-mono);
+    font-weight:600;
+    font-size:13px;
+  }
+  .scale-row input.points{
+    width:4em;
+    font-family:var(--font-mono);
+    font-size:13px;
+    text-align:right;
+  }
+  .scale-row button{
+    margin-left:auto;
+  }
+  input.letter,input.points{
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:3px;
+    color:var(--ink);
+    padding:4px 6px;
+  }
+  .scale-actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+  }
+
+  /* Buttons */
+  button{
+    font-family:var(--font-body);
+    font-size:13px;
+    font-weight:600;
+    border-radius:3px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+    padding:7px 12px;
+    cursor:pointer;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent);}
+  button.primary:hover{color:#2a1938; border-color:var(--accent-2-strong); background:var(--accent-2-strong);}
+  button:focus-visible, input:focus-visible, select:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+  }
+  button.primary{
+    background:var(--accent-2);
+    border-color:var(--accent-2);
+    color:#2a1938;
+    font-weight:700;
+  }
+  button.ghost{
+    background:transparent;
+    border-color:transparent;
+    color:var(--ink-soft);
+    padding:6px 8px;
+  }
+  button.ghost:hover{color:var(--warn); border-color:transparent;}
+  button.small{
+    padding:4px 8px;
+    font-size:12px;
+  }
+
+  /* Terms */
+  .terms-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin:8px 0 14px;
+  }
+  .terms-head h2{
+    font-family:var(--font-display);
+    font-size:18px;
+    font-weight:700;
+    margin:0;
+    color:var(--accent);
+  }
+  .term{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:4px;
+    margin-bottom:20px;
+  }
+  .term-head{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px 18px;
+    background:var(--accent-soft);
+    border-bottom:1px solid var(--border);
+    border-radius:4px 4px 0 0;
+    flex-wrap:wrap;
+  }
+  .term-head input.term-name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:17px;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:3px;
+    padding:3px 6px;
+    color:var(--ink);
+    min-width:0;
+    flex:1 1 160px;
+  }
+  .term-head input.term-name:hover,.term-head input.term-name:focus{
+    border-color:var(--border);
+    background:var(--bg);
+  }
+  .term-gpa{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .term-gpa b{
+    color:var(--accent-2);
+    font-size:17px;
+    font-weight:700;
+  }
+
+  .subj-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  .subj-table thead th{
+    text-align:left;
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    font-weight:600;
+    padding:10px 10px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  .subj-table thead th.num{text-align:right;}
+  .subj-table tbody td{
+    padding:6px 10px;
+    border-bottom:1px solid var(--border);
+    vertical-align:middle;
+  }
+  .subj-table tbody tr:last-child td{border-bottom:none;}
+  .subj-table input.subj-name{
+    width:100%;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:3px;
+    padding:6px 7px;
+    color:var(--ink);
+    font-size:14px;
+  }
+  .subj-table input.subj-name:hover,.subj-table input.subj-name:focus{
+    border-color:var(--border);
+    background:var(--bg);
+  }
+  .subj-table input.subj-credits{
+    width:4.2em;
+    font-family:var(--font-mono);
+    text-align:right;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:3px;
+    padding:5px 7px;
+    color:var(--ink);
+  }
+  .subj-table select.subj-grade{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:3px;
+    padding:5px 6px;
+    color:var(--ink);
+  }
+  .subj-table td.points-col{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    color:var(--ink-soft);
+    text-align:right;
+    white-space:nowrap;
+  }
+  .subj-table td.num{text-align:right;}
+  .subj-table td.del{width:1%;}
+
+  .term-foot{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 18px 16px;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .empty-row{
+    padding:20px 18px;
+    color:var(--ink-soft);
+    font-size:13.5px;
+  }
+
+  .no-terms{
+    background:var(--surface);
+    border:1px dashed var(--border);
+    border-radius:4px;
+    padding:40px 24px;
+    text-align:center;
+    color:var(--ink-soft);
+  }
+  .no-terms p{margin:0 0 14px;}
+
+  footer.note{
+    margin-top:30px;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:center;
+  }
+
+  @media (max-width:520px){
+    .subj-table thead th.credits-h, .subj-table td.credits-col{display:none;}
+    .summary{flex-direction:column; align-items:flex-start;}
+  }
+</style>
+
+<div class="wrap">
+  <header class="page-head">
+    <div>
+      <p class="eyebrow">Academic record</p>
+      <h1>GPA Ledger</h1>
+    </div>
+    <p class="brand-tag">a different kind of GPA tracker</p>
+  </header>
+
+  <div class="save-bar">
+    <button class="primary" id="saveBtn">Save</button>
+    <span class="save-status" id="saveStatus">Not saved yet</span>
+    <button id="exportBtn" class="export-btn">&#8681; Export to Excel</button>
+    <span class="save-status" id="exportStatus"></span>
+  </div>
+
+  <div class="save-bar data-bar">
+    <span class="data-bar-label">Move data between browsers/devices:</span>
+    <button id="exportDataBtn" class="export-btn">&#8681; Export data (JSON)</button>
+    <button id="importDataBtn" class="export-btn">&#8679; Import data (JSON)</button>
+    <input type="file" id="importDataInput" accept="application/json,.json" hidden>
+    <span class="save-status" id="dataStatus"></span>
+  </div>
+
+  <section class="summary">
+    <div class="cgpa-block">
+      <span class="cgpa-label">Cumulative&nbsp;GPA</span>
+      <span class="cgpa-value" id="cgpaValue">0.00</span>
+    </div>
+    <div class="summary-meta">
+      <span><b id="totalCredits">0</b> credits</span>
+      <span><b id="totalTerms">0</b> terms</span>
+      <span><b id="totalSubjects">0</b> subjects</span>
+    </div>
+  </section>
+
+  <details class="scale" id="scaleDetails">
+    <summary>Grade scale <span class="chev">&#9656;</span></summary>
+    <div class="scale-body">
+      <p class="scale-hint">Edit letters or points to match your program's scale — every GPA on this page recalculates immediately.</p>
+      <div class="scale-grid" id="scaleGrid"></div>
+      <div class="scale-actions">
+        <button class="small" id="addGradeBtn">+ Add grade</button>
+        <button class="small" id="resetScaleBtn">Reset to default</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="terms-head">
+    <h2>Terms</h2>
+    <button class="primary" id="addTermBtn">+ Add term</button>
+  </div>
+
+  <div id="termsContainer"></div>
+
+  <div class="no-terms" id="noTerms" hidden>
+    <p>No terms yet. Add your first term to start logging subjects.</p>
+    <button class="primary" id="addTermBtnEmpty">+ Add term</button>
+  </div>
+
+  <footer class="note">Saved automatically in this browser.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var DEFAULT_SCALE = [
+    {letter:"A+", points:4},
+    {letter:"A",  points:3.5},
+    {letter:"B+", points:3},
+    {letter:"B",  points:2.5},
+    {letter:"C+", points:2},
+    {letter:"C",  points:1.5},
+    {letter:"D",  points:1}
+  ];
+
+  var STORE_KEY = "gpa-ledger-state-v1";
+
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+
+  function defaultState(){
+    return {
+      scale: DEFAULT_SCALE.map(function(g){ return {letter:g.letter, points:g.points}; }),
+      terms: [
+        {
+          id: uid(),
+          name: "Term 1",
+          subjects: [
+            {id: uid(), name: "Example Subject", credits: 3, grade: "A"}
+          ]
+        }
+      ]
+    };
+  }
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return defaultState();
+      var parsed = JSON.parse(raw);
+      if(!parsed || !Array.isArray(parsed.terms) || !Array.isArray(parsed.scale)) return defaultState();
+      return parsed;
+    }catch(e){
+      return defaultState();
+    }
+  }
+
+  var saveStatusEl = document.getElementById("saveStatus");
+  var saveStatusTimer = null;
+
+  function formatTime(ts){
+    var d = new Date(ts);
+    var h = d.getHours(), m = d.getMinutes();
+    var ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12; if(h === 0) h = 12;
+    return h + ":" + (m < 10 ? "0" : "") + m + " " + ampm;
+  }
+
+  function save(explicit){
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      var now = Date.now();
+      localStorage.setItem(STORE_KEY + "-saved-at", String(now));
+      if(saveStatusEl){
+        clearTimeout(saveStatusTimer);
+        saveStatusEl.textContent = explicit ? ("Saved just now ✓") : ("Last saved " + formatTime(now));
+        saveStatusEl.classList.add("just-saved");
+        if(explicit){
+          saveStatusTimer = setTimeout(function(){
+            saveStatusEl.textContent = "Last saved " + formatTime(now);
+            saveStatusEl.classList.remove("just-saved");
+          }, 1800);
+        } else {
+          saveStatusEl.classList.remove("just-saved");
+        }
+      }
+    }catch(e){
+      if(saveStatusEl){
+        saveStatusEl.textContent = "Could not save — browser storage unavailable";
+        saveStatusEl.classList.remove("just-saved");
+      }
+    }
+  }
+
+  var state = load();
+
+  (function initSaveStatus(){
+    if(!saveStatusEl) return;
+    try{
+      var savedAt = localStorage.getItem(STORE_KEY + "-saved-at");
+      saveStatusEl.textContent = savedAt ? ("Last saved " + formatTime(parseInt(savedAt, 10))) : "Not saved yet";
+    }catch(e){
+      saveStatusEl.textContent = "Not saved yet";
+    }
+  })();
+
+  function scaleMap(){
+    var m = {};
+    state.scale.forEach(function(g){
+      var p = parseFloat(g.points);
+      if(g.letter && !isNaN(p)) m[g.letter.trim().toUpperCase()] = p;
+    });
+    return m;
+  }
+
+  function fmt(n){
+    if(!isFinite(n)) return "0.00";
+    return n.toFixed(2);
+  }
+
+  function computeTermGpa(term){
+    var map = scaleMap();
+    var totalCredits = 0, totalPoints = 0;
+    term.subjects.forEach(function(s){
+      var c = parseFloat(s.credits);
+      var p = map[(s.grade || "").trim().toUpperCase()];
+      if(!isNaN(c) && c > 0 && p !== undefined){
+        totalCredits += c;
+        totalPoints += c * p;
+      }
+    });
+    return {credits: totalCredits, gpa: totalCredits > 0 ? totalPoints / totalCredits : 0};
+  }
+
+  function computeCgpa(){
+    var map = scaleMap();
+    var totalCredits = 0, totalPoints = 0, subjCount = 0;
+    state.terms.forEach(function(term){
+      term.subjects.forEach(function(s){
+        subjCount++;
+        var c = parseFloat(s.credits);
+        var p = map[(s.grade || "").trim().toUpperCase()];
+        if(!isNaN(c) && c > 0 && p !== undefined){
+          totalCredits += c;
+          totalPoints += c * p;
+        }
+      });
+    });
+    return {
+      credits: totalCredits,
+      gpa: totalCredits > 0 ? totalPoints / totalCredits : 0,
+      subjCount: subjCount
+    };
+  }
+
+  // ---- rendering ----
+
+  var scaleGrid = document.getElementById("scaleGrid");
+  var termsContainer = document.getElementById("termsContainer");
+  var noTerms = document.getElementById("noTerms");
+  var cgpaValue = document.getElementById("cgpaValue");
+  var totalCreditsEl = document.getElementById("totalCredits");
+  var totalTermsEl = document.getElementById("totalTerms");
+  var totalSubjectsEl = document.getElementById("totalSubjects");
+
+  function renderSummary(){
+    var c = computeCgpa();
+    cgpaValue.textContent = fmt(c.gpa);
+    totalCreditsEl.textContent = c.credits;
+    totalTermsEl.textContent = state.terms.length;
+    totalSubjectsEl.textContent = c.subjCount;
+  }
+
+  function renderScale(){
+    scaleGrid.innerHTML = "";
+    state.scale.forEach(function(g, idx){
+      var row = document.createElement("div");
+      row.className = "scale-row";
+
+      var letterInput = document.createElement("input");
+      letterInput.className = "letter";
+      letterInput.value = g.letter;
+      letterInput.setAttribute("aria-label", "Grade letter");
+      letterInput.addEventListener("input", function(){
+        state.scale[idx].letter = letterInput.value;
+        save();
+        renderAll();
+      });
+
+      var eq = document.createElement("span");
+      eq.textContent = "=";
+      eq.style.color = "var(--ink-soft)";
+      eq.style.fontFamily = "var(--font-mono)";
+      eq.style.fontSize = "12px";
+
+      var pointsInput = document.createElement("input");
+      pointsInput.className = "points";
+      pointsInput.type = "number";
+      pointsInput.step = "0.1";
+      pointsInput.value = g.points;
+      pointsInput.setAttribute("aria-label", "Grade points");
+      pointsInput.addEventListener("input", function(){
+        state.scale[idx].points = pointsInput.value;
+        save();
+        renderAll();
+      });
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "ghost small";
+      delBtn.textContent = "✕";
+      delBtn.title = "Remove grade";
+      delBtn.addEventListener("click", function(){
+        state.scale.splice(idx, 1);
+        save();
+        renderAll();
+      });
+
+      row.appendChild(letterInput);
+      row.appendChild(eq);
+      row.appendChild(pointsInput);
+      row.appendChild(delBtn);
+      scaleGrid.appendChild(row);
+    });
+  }
+
+  var NOT_COUNTED = "";
+
+  function gradeOptionsHtml(selected){
+    var placeholderSel = !selected ? " selected" : "";
+    var opts = '<option value=""'+placeholderSel+'>Not counted (pending)</option>';
+    opts += state.scale.map(function(g){
+      var l = g.letter || "";
+      var sel = l.trim().toUpperCase() === (selected||"").trim().toUpperCase() ? " selected" : "";
+      return '<option value="'+escapeAttr(l)+'"'+sel+'>'+escapeHtml(l)+'</option>';
+    }).join("");
+    if(selected && !state.scale.some(function(g){return (g.letter||"").trim().toUpperCase() === selected.trim().toUpperCase();})){
+      opts += '<option value="'+escapeAttr(selected)+'" selected>'+escapeHtml(selected)+'</option>';
+    }
+    return opts;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  function renderTerms(){
+    termsContainer.innerHTML = "";
+    noTerms.hidden = state.terms.length > 0;
+
+    state.terms.forEach(function(term, termIdx){
+      var card = document.createElement("div");
+      card.className = "term";
+
+      var head = document.createElement("div");
+      head.className = "term-head";
+
+      var nameInput = document.createElement("input");
+      nameInput.className = "term-name";
+      nameInput.value = term.name;
+      nameInput.setAttribute("aria-label", "Term name");
+      nameInput.addEventListener("input", function(){
+        term.name = nameInput.value;
+        save();
+      });
+
+      var gpaInfo = computeTermGpa(term);
+      var gpaSpan = document.createElement("span");
+      gpaSpan.className = "term-gpa";
+      gpaSpan.innerHTML = 'GPA <b>'+fmt(gpaInfo.gpa)+'</b> &middot; '+gpaInfo.credits+' credits';
+
+      var removeTermBtn = document.createElement("button");
+      removeTermBtn.className = "ghost small";
+      removeTermBtn.textContent = "Remove term";
+      removeTermBtn.addEventListener("click", function(){
+        state.terms.splice(termIdx, 1);
+        save();
+        renderAll();
+      });
+
+      head.appendChild(nameInput);
+      head.appendChild(gpaSpan);
+      head.appendChild(removeTermBtn);
+      card.appendChild(head);
+
+      if(term.subjects.length === 0){
+        var empty = document.createElement("div");
+        empty.className = "empty-row";
+        empty.textContent = "No subjects yet.";
+        card.appendChild(empty);
+      } else {
+        var table = document.createElement("table");
+        table.className = "subj-table";
+        table.innerHTML =
+          '<thead><tr>' +
+            '<th>Subject</th>' +
+            '<th class="num credits-h">Credits</th>' +
+            '<th>Grade</th>' +
+            '<th class="num">Points</th>' +
+            '<th></th>' +
+          '</tr></thead>';
+        var tbody = document.createElement("tbody");
+
+        term.subjects.forEach(function(subj, subjIdx){
+          var tr = document.createElement("tr");
+
+          var tdName = document.createElement("td");
+          var nameIn = document.createElement("input");
+          nameIn.className = "subj-name";
+          nameIn.value = subj.name;
+          nameIn.placeholder = "Subject name";
+          nameIn.setAttribute("aria-label", "Subject name");
+          nameIn.addEventListener("input", function(){
+            subj.name = nameIn.value;
+            save();
+          });
+          tdName.appendChild(nameIn);
+
+          var tdCredits = document.createElement("td");
+          tdCredits.className = "num credits-col";
+          var credIn = document.createElement("input");
+          credIn.className = "subj-credits";
+          credIn.type = "number";
+          credIn.min = "0";
+          credIn.step = "0.5";
+          credIn.value = subj.credits;
+          credIn.setAttribute("aria-label", "Credits");
+          credIn.addEventListener("input", function(){
+            subj.credits = credIn.value;
+            save();
+            renderAll();
+          });
+          tdCredits.appendChild(credIn);
+
+          var tdGrade = document.createElement("td");
+          var gradeSel = document.createElement("select");
+          gradeSel.className = "subj-grade";
+          gradeSel.setAttribute("aria-label", "Grade");
+          gradeSel.innerHTML = gradeOptionsHtml(subj.grade);
+          gradeSel.addEventListener("change", function(){
+            subj.grade = gradeSel.value;
+            save();
+            renderAll();
+          });
+          tdGrade.appendChild(gradeSel);
+
+          var tdPoints = document.createElement("td");
+          tdPoints.className = "points-col";
+          var map = scaleMap();
+          var p = map[(subj.grade||"").trim().toUpperCase()];
+          tdPoints.textContent = p === undefined ? "—" : p.toFixed(1);
+
+          var tdDel = document.createElement("td");
+          tdDel.className = "del";
+          var delSubjBtn = document.createElement("button");
+          delSubjBtn.className = "ghost small";
+          delSubjBtn.textContent = "✕";
+          delSubjBtn.title = "Remove subject";
+          delSubjBtn.addEventListener("click", function(){
+            term.subjects.splice(subjIdx, 1);
+            save();
+            renderAll();
+          });
+          tdDel.appendChild(delSubjBtn);
+
+          tr.appendChild(tdName);
+          tr.appendChild(tdCredits);
+          tr.appendChild(tdGrade);
+          tr.appendChild(tdPoints);
+          tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        card.appendChild(table);
+      }
+
+      var foot = document.createElement("div");
+      foot.className = "term-foot";
+      var addSubjBtn = document.createElement("button");
+      addSubjBtn.textContent = "+ Add subject";
+      addSubjBtn.addEventListener("click", function(){
+        term.subjects.push({id: uid(), name: "", credits: 3, grade: NOT_COUNTED});
+        save();
+        renderAll();
+      });
+      foot.appendChild(addSubjBtn);
+      card.appendChild(foot);
+
+      termsContainer.appendChild(card);
+    });
+  }
+
+  function renderAll(){
+    renderScale();
+    renderTerms();
+    renderSummary();
+  }
+
+  document.getElementById("addGradeBtn").addEventListener("click", function(){
+    state.scale.push({letter:"", points:0});
+    save();
+    renderAll();
+  });
+
+  document.getElementById("resetScaleBtn").addEventListener("click", function(){
+    state.scale = DEFAULT_SCALE.map(function(g){ return {letter:g.letter, points:g.points}; });
+    save();
+    renderAll();
+  });
+
+  function addTerm(){
+    state.terms.push({
+      id: uid(),
+      name: "Term " + (state.terms.length + 1),
+      subjects: []
+    });
+    save();
+    renderAll();
+  }
+  document.getElementById("addTermBtn").addEventListener("click", addTerm);
+  document.getElementById("addTermBtnEmpty").addEventListener("click", addTerm);
+
+  document.getElementById("saveBtn").addEventListener("click", function(){
+    save(true);
+  });
+
+  // ---- Excel export ----
+
+  function sanitizeSheetName(raw, used){
+    var s = String(raw || "Sheet").replace(/[:\\\/\?\*\[\]]/g, "-").trim();
+    if(!s) s = "Sheet";
+    if(s.length > 31) s = s.slice(0, 31);
+    var base = s, key = s.toLowerCase(), i = 2;
+    while(used[key]){
+      var suffix = " (" + i + ")";
+      s = base.slice(0, 31 - suffix.length) + suffix;
+      key = s.toLowerCase();
+      i++;
+    }
+    used[key] = true;
+    return s;
+  }
+
+  function quoteSheet(name){
+    return "'" + name.replace(/'/g, "''") + "'";
+  }
+
+  function buildWorkbook(){
+    var wb = XLSX.utils.book_new();
+    var usedNames = {};
+
+    // Read-me sheet explaining the calculation
+    var readmeRows = [
+      ["GPA Ledger export"],
+      [],
+      ["Term GPA", "= SUM(Credits x Grade Points, for subjects with a counted grade) / SUM(Credits, for subjects with a counted grade)"],
+      ["Cumulative GPA", "= SUM(Credits x Grade Points across ALL terms) / SUM(Credits across ALL terms)"],
+      [],
+      ["Subjects set to \"Not counted (pending)\" are excluded from both formulas, same as on the live page."],
+      ["Edit the \"Grade Scale\" sheet to change what each letter is worth — every formula in this workbook recalculates automatically."],
+      ["Every number here is a live Excel formula, not a static value: edit Credits or Grade on any term sheet and GPA/CGPA update."]
+    ];
+    var readmeWs = XLSX.utils.aoa_to_sheet(readmeRows);
+    readmeWs['!cols'] = [{wch:16},{wch:90}];
+    XLSX.utils.book_append_sheet(wb, readmeWs, sanitizeSheetName("Read Me", usedNames));
+
+    // Grade scale sheet
+    var scaleRows = [["Letter", "Points"]];
+    state.scale.forEach(function(g){
+      scaleRows.push([g.letter || "", parseFloat(g.points) || 0]);
+    });
+    var scaleSheetName = sanitizeSheetName("Grade Scale", usedNames);
+    var scaleWs = XLSX.utils.aoa_to_sheet(scaleRows);
+    scaleWs['!cols'] = [{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, scaleWs, scaleSheetName);
+    var scaleLastRow = Math.max(scaleRows.length, 2);
+    var scaleRangeA = quoteSheet(scaleSheetName) + "!$A$2:$A$" + scaleLastRow;
+    var scaleRangeAB = quoteSheet(scaleSheetName) + "!$A$2:$B$" + scaleLastRow;
+
+    // One sheet per term
+    var termMeta = [];
+    state.terms.forEach(function(term){
+      var sheetName = sanitizeSheetName(term.name || "Term", usedNames);
+      var header = ["Subject", "Credits", "Grade", "Grade Points", "Counted in GPA", "Weighted Points (Credits x Points)", "Counted Credits"];
+      var rows = [header];
+      term.subjects.forEach(function(s){
+        rows.push([s.name || "", parseFloat(s.credits) || 0, s.grade || "", 0, 0, 0, 0]);
+      });
+      var n = term.subjects.length;
+      rows.push([]);
+      rows.push(["", "", "", "", "", "Total Counted Credits", 0]);
+      rows.push(["", "", "", "", "", "Term GPA", 0]);
+      var ws = XLSX.utils.aoa_to_sheet(rows);
+
+      for(var i = 0; i < n; i++){
+        var r = i + 2;
+        ws["D" + r] = {t:"n", f:"IFERROR(VLOOKUP(C" + r + "," + scaleRangeAB + ",2,FALSE),0)"};
+        ws["E" + r] = {t:"n", f:"IF(COUNTIF(" + scaleRangeA + ",C" + r + ")>0,1,0)"};
+        ws["F" + r] = {t:"n", f:"B" + r + "*D" + r + "*E" + r};
+        ws["G" + r] = {t:"n", f:"B" + r + "*E" + r};
+      }
+      var creditsRow = n + 3, gpaRow = n + 4;
+      if(n > 0){
+        ws["G" + creditsRow] = {t:"n", f:"SUM(G2:G" + (n + 1) + ")"};
+        ws["G" + gpaRow] = {t:"n", f:"IFERROR(SUM(F2:F" + (n + 1) + ")/G" + creditsRow + ",0)"};
+      } else {
+        ws["G" + creditsRow] = {t:"n", v:0};
+        ws["G" + gpaRow] = {t:"n", v:0};
+      }
+      ws['!cols'] = [{wch:28},{wch:9},{wch:8},{wch:13},{wch:14},{wch:22},{wch:15}];
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      termMeta.push({
+        name: term.name || sheetName,
+        creditsRef: quoteSheet(sheetName) + "!G" + creditsRow,
+        gpaRef: quoteSheet(sheetName) + "!G" + gpaRow
+      });
+    });
+
+    // Cumulative sheet
+    var m = termMeta.length;
+    var cumRows = [["Term", "Credits", "GPA"]];
+    for(var t = 0; t < m; t++) cumRows.push(["", "", ""]);
+    cumRows.push([]);
+    cumRows.push(["", "Total Credits", 0]);
+    cumRows.push(["", "Cumulative GPA", 0]);
+    var cumWs = XLSX.utils.aoa_to_sheet(cumRows);
+    termMeta.forEach(function(tm, idx){
+      var r = idx + 2;
+      cumWs["A" + r] = {t:"s", v: tm.name};
+      cumWs["B" + r] = {t:"n", f: tm.creditsRef};
+      cumWs["C" + r] = {t:"n", f: tm.gpaRef};
+    });
+    var totalRow = m + 3, cgpaRow = m + 4;
+    if(m > 0){
+      cumWs["C" + totalRow] = {t:"n", f:"SUM(B2:B" + (m + 1) + ")"};
+      cumWs["C" + cgpaRow] = {t:"n", f:"IFERROR(SUMPRODUCT(B2:B" + (m + 1) + ",C2:C" + (m + 1) + ")/C" + totalRow + ",0)"};
+    } else {
+      cumWs["C" + totalRow] = {t:"n", v:0};
+      cumWs["C" + cgpaRow] = {t:"n", v:0};
+    }
+    cumWs['!cols'] = [{wch:22},{wch:12},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, cumWs, sanitizeSheetName("Cumulative", usedNames));
+
+    return wb;
+  }
+
+  function offerDownload(blob, filename){
+    if(window.claude && typeof window.claude.use === "function"){
+      return window.claude.use("downloads").then(function(downloads){
+        if(!downloads) throw {code:"unavailable"};
+        return downloads.save({filename: filename, data: blob});
+      });
+    }
+    return new Promise(function(resolve, reject){
+      try{
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+        resolve({status:"saved"});
+      }catch(e){
+        reject(e);
+      }
+    });
+  }
+
+  var exportStatusEl = document.getElementById("exportStatus");
+  document.getElementById("exportBtn").addEventListener("click", function(){
+    if(typeof XLSX === "undefined"){
+      exportStatusEl.textContent = "Export library failed to load — check your connection.";
+      return;
+    }
+    exportStatusEl.textContent = "Preparing workbook…";
+    try{
+      var wb = buildWorkbook();
+      var arrayBuffer = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+      var blob = new Blob([arrayBuffer], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      var filename = "GPA-Ledger.xlsx";
+      offerDownload(blob, filename).then(function(result){
+        exportStatusEl.textContent = result && result.status === "delivered" ? "Delivered ✓" : "Downloaded ✓";
+        setTimeout(function(){ exportStatusEl.textContent = ""; }, 2500);
+      }).catch(function(err){
+        var code = err && err.code;
+        if(code === "declined"){
+          exportStatusEl.textContent = "Download cancelled.";
+        } else {
+          exportStatusEl.textContent = "Could not save the file.";
+        }
+      });
+    }catch(e){
+      exportStatusEl.textContent = "Export failed: " + (e && e.message ? e.message : "unknown error");
+    }
+  });
+
+  // ---- JSON data export/import (move data between browsers, devices, the
+  // published artifact and a local copy of this file — none of which share
+  // localStorage with each other) ----
+
+  var dataStatusEl = document.getElementById("dataStatus");
+
+  document.getElementById("exportDataBtn").addEventListener("click", function(){
+    dataStatusEl.textContent = "Preparing…";
+    try{
+      var json = JSON.stringify(state, null, 2);
+      var blob = new Blob([json], {type:"application/json"});
+      offerDownload(blob, "gpa-ledger-data.json").then(function(result){
+        dataStatusEl.textContent = result && result.status === "delivered" ? "Delivered ✓" : "Downloaded ✓";
+        setTimeout(function(){ dataStatusEl.textContent = ""; }, 2500);
+      }).catch(function(err){
+        dataStatusEl.textContent = (err && err.code === "declined") ? "Download cancelled." : "Could not save the file.";
+      });
+    }catch(e){
+      dataStatusEl.textContent = "Export failed: " + (e && e.message ? e.message : "unknown error");
+    }
+  });
+
+  function isValidState(obj){
+    if(!obj || typeof obj !== "object") return false;
+    if(!Array.isArray(obj.scale) || !Array.isArray(obj.terms)) return false;
+    return obj.scale.every(function(g){ return g && typeof g.letter === "string"; })
+      && obj.terms.every(function(t){ return t && typeof t.name === "string" && Array.isArray(t.subjects); });
+  }
+
+  var importDataInput = document.getElementById("importDataInput");
+  document.getElementById("importDataBtn").addEventListener("click", function(){
+    importDataInput.value = "";
+    importDataInput.click();
+  });
+  importDataInput.addEventListener("change", function(){
+    var file = importDataInput.files && importDataInput.files[0];
+    if(!file) return;
+    var replace = window.confirm(
+      "Import “" + file.name + "”?\n\nThis replaces everything currently on this page (all terms, subjects and the grade scale) with the contents of this file."
+    );
+    if(!replace) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(String(reader.result));
+        if(!isValidState(parsed)){
+          dataStatusEl.textContent = "That file doesn't look like a GPA Ledger export.";
+          return;
+        }
+        parsed.terms.forEach(function(t){
+          if(!t.id) t.id = uid();
+          t.subjects.forEach(function(s){ if(!s.id) s.id = uid(); });
+        });
+        state = parsed;
+        save();
+        renderAll();
+        dataStatusEl.textContent = "Imported ✓";
+        setTimeout(function(){ dataStatusEl.textContent = ""; }, 2500);
+      }catch(e){
+        dataStatusEl.textContent = "Could not read that file as JSON.";
+      }
+    };
+    reader.onerror = function(){
+      dataStatusEl.textContent = "Could not read that file.";
+    };
+    reader.readAsText(file);
+  });
+
+  renderAll();
+})();
+</script>
