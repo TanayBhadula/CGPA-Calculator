@@ -2,6 +2,8 @@
 
 A single-page, no-backend GPA and CGPA calculator. Add terms, add subjects with credits and grades, and see your term GPA and cumulative CGPA update live. The grade-to-points scale is fully editable, every subject can be left as a placeholder until a grade comes in, and your data can be exported to a formula-driven Excel workbook or backed up as JSON.
 
+**Live:** https://tanaybhadula.github.io/CGPA-Calculator/
+
 No installation, no server, no account. Open `index.html` in a browser and it works.
 
 ## Features
@@ -16,7 +18,7 @@ No installation, no server, no account. Open `index.html` in a browser and it wo
 
 ## How to use it
 
-1. Open `index.html` in any modern browser (double-click it, or host it anywhere — see [Hosting](#hosting-on-github-pages) below)
+1. Open the [live site](https://tanaybhadula.github.io/CGPA-Calculator/), or open `index.html` in any modern browser (double-click it, or host it anywhere)
 2. Click **+ Add term**, then **+ Add subject** inside it
 3. Type the subject name, set its credits, and pick a grade from the dropdown (or leave it on "Not counted (pending)" until you have the grade)
 4. Term GPA and the overall Cumulative GPA update immediately
@@ -54,17 +56,6 @@ Cumulative GPA = Σ(credits × grade points) / Σ(credits)   — across every su
 ```
 
 A subject only counts if it has a positive credit value and a grade that matches a letter currently in the grade scale. "Not counted (pending)" (or any unmatched grade) is skipped entirely, not treated as zero.
-
-## Hosting on GitHub Pages
-
-Since this is a single static HTML file with no build step:
-
-1. Push this repo to GitHub
-2. Go to **Settings → Pages**
-3. Under **Source**, pick the branch and `/ (root)` folder
-4. Your site will be live at `https://<your-username>.github.io/<repo-name>/`
-
-Students using the hosted link will each get their own `localStorage` scoped to that GitHub Pages URL — one shared app, independent data per visitor's browser.
 
 ## File structure
 
